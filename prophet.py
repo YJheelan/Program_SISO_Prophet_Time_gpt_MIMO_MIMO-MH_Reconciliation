@@ -6,7 +6,17 @@ import pandas as pd
 from pathlib import Path
 
 def load_prophet_forecasts(targets):
-    """Loads pre-computed Prophet forecast files."""
+    """
+    Loads pre-computed Prophet forecast files.
+
+    Utility: Retrieves forecast CSVs for each target from a directory. Warns if files are missing.
+
+    Arguments:
+    - targets: list of str, target variable names.
+
+    Returns:
+    - forecast_dfs: dict of {target: DataFrame}, forecasts for each target.
+    """
     print("    - Loading pre-computed Prophet forecasts...")
     # This assumes forecast files are stored in a specific directory
     base_path = Path("neuralprophet_results/forecasts/")

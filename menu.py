@@ -2,7 +2,17 @@
 # menu.py
 # ==============================================================================
 def display_menu():
-    """Displays the improved model selection menu."""
+    """
+    Displays the improved model selection menu.
+
+    Utility: Prints the interactive menu options for user selection.
+
+    Arguments:
+    - None
+
+    Returns:
+    - None
+    """
     print("\n" + "="*60)
     print("MODEL SELECTION MENU")
     print("="*60)
@@ -28,7 +38,17 @@ def display_menu():
     print("="*60)
 
 def get_user_choice(max_choice):
-    """Gets and validates the user's menu choice."""
+    """
+    Gets and validates the user's menu choice.
+
+    Utility: Prompts and validates integer input within range.
+
+    Arguments:
+    - max_choice: int, maximum valid choice.
+
+    Returns:
+    - choice: int, validated user choice.
+    """
     while True:
         try:
             choice = int(input(f"Please enter your choice (1-{max_choice}): "))
@@ -40,7 +60,17 @@ def get_user_choice(max_choice):
             print("Invalid input. Please enter a number.")
 
 def get_custom_model_selection():
-    """Allows for custom selection of models and reconciliation."""
+    """
+    Allows for custom selection of models and reconciliation.
+
+    Utility: Prompts user for custom model choices, including reconciliation options for ELM models.
+
+    Arguments:
+    - None
+
+    Returns:
+    - models_to_run: list of tuples (model_name, reconcile_flag).
+    """
     available_models = {
         1: "siso", 2: "mimo", 3: "mimo-mh",
         4: "prophet", 5: "timegpt"
@@ -96,7 +126,14 @@ def get_custom_model_selection():
 def select_models():
     """
     Interactive function to select which models to run via the menu.
-    Returns a list of tuples: (model_name, reconciliation_flag).
+
+    Utility: Displays menu, gets choice, and maps to list of models/reconciliation flags.
+
+    Arguments:
+    - None
+
+    Returns:
+    - list of tuples: (model_name, reconciliation_flag).
     """
     display_menu()
     user_choice = get_user_choice(14)

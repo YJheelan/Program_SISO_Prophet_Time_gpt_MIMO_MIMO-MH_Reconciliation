@@ -12,43 +12,19 @@ def train_elm(X_train, Y_train, X_test, Y_test,
     """
     Train an ELM (Extreme Learning Machine) with Ridge-regularized linear readout.
 
-    MODEL
-    -----
-    • Hidden layer: random affine transform + ReLU activation:
-          H = ReLU( X_train @ W^T + b^T )
-      where W ∈ R[num_hidden, n_features], b ∈ R[num_hidden, 1].
-    • Output/readout layer (beta): closed-form ridge regression per output:
-          (H^T H + λ I) β = H^T Y_train
-      solved via np.linalg.solve; falls back to pseudo-inverse if needed.
+    Utility: Initializes random hidden layer, computes readout weights using closed-form ridge regression, and selects best initialization based on test RMSE.
 
-    SEEDS / INITIALIZATIONS
-    -----------------------
-    • We draw new random W, b for each initialization and keep the one with the
-      lowest validation RMSE on X_test/Y_test.
-    • The number of tries is `num_initializations` (a.k.a. seeds / restarts).
+    Arguments:
+    - X_train: numpy array, training inputs.
+    - Y_train: numpy array, training targets.
+    - X_test: numpy array, test inputs (for validation).
+    - Y_test: numpy array, test targets (for validation).
+    - num_hidden: int, number of hidden neurons.
+    - num_initializations: int, number of random restarts.
+    - lambda_reg: float, ridge regularization parameter.
 
-    PREDICTIONS
-    -----------
-    • Test hidden: H_test = ReLU( X_test @ W^T + b^T )
-    • Predictions:  Y_pred = H_test @ β
-      (Your original code applies ReLU to the output as well and clips negatives
-       to 0 via np.maximum; we keep that behavior.)
-
-    METRIC
-    ------
-    • RMSE averaged across output dimensions:
-          mean_h( sqrt( mean_t( (y_true - y_pred)^2 ) ) )
-
-    External config expected (if args are None)
-    -------------------------------------------
-    NUM_INITIALIZATIONS = 1             # number of random initializations (seeds)
-    N_HIDDEN = 1000                     # 1000 neurons
-    LAMBDA_REG = 1e-6                   # regularization
-
-    Returns
-    -------
-    best_model : tuple (W, b, beta)
-        Parameters for the best run: weights, biases, and readout matrix.
+    Returns:
+    - best_model: tuple (W, b, beta), best weights, biases, readout.
     """
     best_rmse = float('inf')
     best_model = None
@@ -86,18 +62,14 @@ def predict_elm(X, model):
     """
     Forward pass for a trained ELM.
 
-    Parameters
-    ----------
-    X : np.ndarray
-        Feature matrix of shape (n_samples, n_features).
-    model : tuple
-        (W, b, beta) returned by `train_elm`.
+    Utility: Computes predictions using trained weights and ReLU activation.
 
-    Returns
-    -------
-    Y_pred : np.ndarray
-        Predicted targets. Uses the same ReLU on hidden and non-negativity clamp
-        on outputs as in training selection.
+    Arguments:
+    - X: numpy array, input features.
+    - model: tuple (W, b, beta), trained parameters.
+
+    Returns:
+    - Y_pred: numpy array, predicted targets.
     """
     W, b, beta = model
     H = np.maximum(0, X @ W.T + b.T)

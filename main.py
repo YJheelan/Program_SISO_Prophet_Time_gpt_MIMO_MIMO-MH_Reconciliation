@@ -9,11 +9,11 @@ import datetime
 
 # --- Import local modules ---
 from utils import load_and_preprocess_data
-from models import run_siso_all_horizons, run_mimo_all_horizons, run_mimo_mh_all_horizons
-from metrics import compute_all_metrics, stack_external_metrics
+from models import run_siso_all_horizons, run_mimo_all_horizons, run_mimo_mh_all_horizons, run_persistence_models
+from metrics import compute_all_metrics, stack_external_metrics, compute_correlations, compute_pacf_matrix
 from prophet import load_prophet_forecasts
 from timegpt import load_timegpt_metrics
-from plotting import plot_metrics_subplots, plot_normalized_metrics_subplots, plot_all_metrics_by_energy_variable, plot_metrics_by_variable_subplots
+from plotting import plot_metrics_subplots, plot_normalized_metrics_subplots, plot_all_metrics_by_energy_variable, plot_metrics_by_variable_subplots, plot_correlations, plot_pacf_solar, plot_reconciliation_improvement, plot_model_times
 from menu import select_models
 
 CONFIG = {
@@ -21,9 +21,9 @@ CONFIG = {
     "date_col": "Date",
     "split_date": '2021-01-01',
     "targets": [
-        'production_totale_mw', 'thermique_mw', 'hydraulique_mw', 
-        'micro-hydraulique_mw', 'solaire_photovoltaique_mw', 'eolien_mw', 
-        'bioenergies_mw', 'importations_mw'
+        'total_production_mw', 'thermal_mw', 'hydraulic_mw', 
+        'micro_hydraulic_mw', 'solar_photovoltaic_mw', 'wind_mw', 
+        'bioenergy_mw', 'imports_mw'
     ],
     "elm_params": {
         "n_hidden": 1000,
@@ -39,7 +39,19 @@ CONFIG = {
 # Helper functions for main execution
 # ==============================================================================
 def get_user_input(prompt, default_value, target_type):
-    """Generic function to get user input with a default value and type casting."""
+    """
+    Generic function to get user input with a default value and type casting.
+
+    Utility: Prompts user with default, validates type.
+
+    Arguments:
+    - prompt: str, input prompt.
+    - default_value: any, default.
+    - target_type: type, e.g., int, float.
+
+    Returns:
+    - value: typed user input or default.
+    """
     while True:
         user_str = input(f"{prompt} [default: {default_value}] (press Enter to use default): ")
         if not user_str:
@@ -50,7 +62,17 @@ def get_user_input(prompt, default_value, target_type):
             print(f"Invalid input. Please enter a value of type '{target_type.__name__}'.")
 
 def get_hyperparameters(config):
-    """Prompts the user to set hyperparameters, with defaults."""
+    """
+    Prompts the user to set hyperparameters, with defaults.
+
+    Utility: Interactively sets config params for ELM and split.
+
+    Arguments:
+    - config: dict, current config.
+
+    Returns:
+    - config: updated dict.
+    """
     print("\n" + "="*60)
     print("HYPERPARAMETER CONFIGURATION")
     print("="*60)
@@ -98,7 +120,20 @@ def get_hyperparameters(config):
     return config
         
 def process_results(df_results, base_model_name, all_results_list, reconcile):
-    """Processes the results dataframe, adding either base or reconciled based on reconcile flag."""
+    """
+    Processes the results dataframe, adding either base or reconciled based on reconcile flag.
+
+    Utility: Extracts base or reconciled predictions into standardized DataFrames.
+
+    Arguments:
+    - df_results: DataFrame, model results.
+    - base_model_name: str, e.g., "MIMO-MH".
+    - all_results_list: list, to append processed DataFrames.
+    - reconcile: bool, whether to process reconciled.
+
+    Returns:
+    - None (appends to list).
+    """
     if reconcile:
         # Only add reconciled if reconciliation is applied
         if 'y_pred_rec' in df_results.columns:
@@ -116,16 +151,30 @@ def process_results(df_results, base_model_name, all_results_list, reconcile):
 # Main execution block
 # ==============================================================================
 def main():
+    """
+    Main function to run the forecasting pipeline.
+
+    Utility: Orchestrates data loading, model selection, running, metrics, and plotting.
+
+    Arguments:
+    - None
+
+    Returns:
+    - None
+    """
     import os
     # folder of figures
     os.makedirs("figures", exist_ok=True)
-    """Main function to run the forecasting pipeline."""
     
     # Step 0: Get user choices for models and hyperparameters
     models_to_run = select_models()
     if not models_to_run:
         print("No model selected. Exiting program.")
         return
+    
+    # Ask if user wants to include persistence in plots
+    plot_persistence_input = input("Do you want to include persistence models in plots? (y/n): ").lower()
+    plot_persistence = plot_persistence_input == 'y'
         
     # Ask for hyperparameters only if an ELM model is selected
     if any(m[0] in {'siso', 'mimo', 'mimo-mh'} for m in models_to_run):
@@ -142,13 +191,17 @@ def main():
         else:
             suffix = '-REC' if reconcile_flag else ''
             models_to_plot.append(f"{model_name.upper()}{suffix}")
+            
+    if plot_persistence:
+        models_to_plot.extend(['Persistence_h', 'Persistence_24h'])
     
     # Step 1: Load and preprocess data
     df_all = load_and_preprocess_data(Path(final_config["data_path"]), final_config["date_col"])
     df_subset = df_all[["ds"] + final_config["targets"]]
 
-    print(">>> [Step 2/5] Running forecasting models...")
+    print(">>> Running forecasting models...")
     all_results = []
+    model_times = {}  # New: Collect execution times
 
     # Run selected models
     for model_name, reconcile_flag in models_to_run:
@@ -183,17 +236,34 @@ def main():
             continue
             
         end_time = time.time()
-        print(f"    -> Execution time: {end_time - start_time:.2f} seconds.")
+        model_key = model_name.upper() + ('-REC' if reconcile_flag else '')
+        model_times[model_key] = end_time - start_time
+        print(f"    -> Execution time for {model_key}: {model_times[model_key]:.2f} seconds.")
 
     df_results = pd.concat(all_results, ignore_index=True) if all_results else pd.DataFrame()
-    print(">>> [Step 2/5] Forecasting models finished.\n")
+    print(">>> Forecasting models finished.\n")
 
     # Step 3: Compute metrics for our models
     metrics_df = compute_all_metrics(df_results)
     
+    # Run persistence models only if selected
+    if plot_persistence:
+        print(">>> Running Persistence models...")
+        pers_start = time.time()
+        pers_results = run_persistence_models(
+            df_subset, final_config["split_date"], final_config["targets"], 
+            final_config["window_params"]["n_lags"], final_config["window_params"]["n_forecasts"]
+        )
+        pers_end = time.time()
+        model_times['Persistence'] = pers_end - pers_start  # Group as one
+        print(f"    -> Execution time for Persistence: {model_times['Persistence']:.2f} seconds.")
+        pers_df = pd.DataFrame(pers_results, columns=["model", "horizon", "output", "nRMSE", "nMAE", "nMBE", "R2", "RMSE", "MAE", "MBE"])
+    else:
+        pers_df = pd.DataFrame()
+    
     # Step 4: Load and compute metrics for external models
-    print(">>> [Step 4/5] Loading and processing external model results...")
-    all_metrics = [metrics_df]
+    print(">>> Loading and processing external model results...")
+    all_metrics = [metrics_df, pers_df]
     
     selected_model_names = [m[0] for m in models_to_run]
     
@@ -204,7 +274,8 @@ def main():
         if not prophet_metrics.empty:
             all_metrics.append(prophet_metrics)
         end_time = time.time()
-        print(f"Prophet results processed in {end_time - start_time:.2f} seconds.")
+        model_times['Prophet'] = end_time - start_time
+        print(f"Prophet results processed in {model_times['Prophet']:.2f} seconds.")
 
     if 'timegpt' in selected_model_names:
         start_time = time.time()
@@ -212,15 +283,39 @@ def main():
         if timegpt_metrics is not None:
             all_metrics.append(timegpt_metrics)
         end_time = time.time()
-        print(f"TimeGPT results processed in {end_time - start_time:.2f} seconds.")
+        model_times['TimeGPT'] = end_time - start_time
+        print(f"TimeGPT results processed in {model_times['TimeGPT']:.2f} seconds.")
     
     # Combine all metrics into a single DataFrame
     final_metrics = pd.concat(all_metrics, ignore_index=True).sort_values(
         ["output", "horizon", "model"]
     ).reset_index(drop=True)
 
+    # Calcul et plot des corrélations
+    output_corrs = compute_correlations(df_results, by='output')
+    horizon_corrs = compute_correlations(df_results, by='horizon')
+    
+    print("\n>>> Correlations between sources (outputs) for each model :")
+    if output_corrs:
+        for model, corr in output_corrs.items():
+            print(f"\nModel {model}:\n{corr}")
+    else:
+        print("No correlation calculated (df_results empty ?)")
+    
+    print("\n>>> Correlations between horizons for each model :")
+    if horizon_corrs:
+        for model, corr in horizon_corrs.items():
+            print(f"\nModel {model}:\n{corr}")
+    else:
+        print("No correlation calculated (df_results empty ?)")
+    
+    # Plots seulement si dict non vide
+    plot_correlations(output_corrs, by='output')
+    plot_correlations(horizon_corrs, by='horizon')
+    plot_pacf_solar(df_subset, lags=48)
+    #pacf_horizon_matrices = compute_pacf_matrix(df_results, output="solar_photovoltaic_mw", max_horizon=24)
     print("    - All model metrics have been combined.")
-    print(">>> [Step 4/5] External models processed.\n")
+    print(">>>  External models processed.\n")
 
     # Save metrics to CSV
     output_filename = "final_metrics_comparison.csv"
@@ -242,8 +337,12 @@ def main():
         plot_normalized_metrics_subplots(final_metrics, models_to_plot=models_to_plot)
         plot_all_metrics_by_energy_variable(final_metrics, models_to_plot=models_to_plot)
         plot_metrics_by_variable_subplots(final_metrics, models_to_plot=models_to_plot) # Call to the new function
+        plot_reconciliation_improvement(final_metrics)  # New: Reconciliation utility plot
     else:
-        print(">>> [Step 5/5] Skipping plot generation as no results were produced.")
+        print(">>> Skipping plot generation as no results were produced.")
+    
+    # Plot model times (always, if any)
+    plot_model_times(model_times)
 
 if __name__ == '__main__':
     main()
