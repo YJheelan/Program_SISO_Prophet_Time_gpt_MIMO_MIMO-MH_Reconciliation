@@ -10,23 +10,32 @@ Unlike Single-Input Single-Output (SISO) models, which process each source indep
 
 The performance of energy forecasting models directly depends on the quality and representativeness of the data. To capture the dynamics of interactions between various energy sources, we use detailed hourly time series over a sufficiently long period to reflect actual variability. A time series is a sequence of observations indexed by time. In this report, the time series represent the hourly electricity production in MWh from different sources (Thermal, Hydropower, Micro-hydro, Solar PV, Wind, Bioenergy, Imports). They also include the average production cost in €/MWh and the total production in MWh. These series are managed by EDF for the Corsica region (https://opendata-corse.edf.fr/pages/home0/), covering the period from 2016 to 2022 with hourly resolution, ensuring both reliability and representativeness of the Corsican island energy context.
 
+Column names in the processed data :
+- `total_production_mw`: Total electricity production.
+- `thermal_mw`: Thermal energy production.
+- `hydraulic_mw`: Hydraulic energy production.
+- `micro_hydraulic_mw`: Micro-hydraulic energy production.
+- `solar_photovoltaic_mw`: Solar photovoltaic energy production.
+- `wind_mw`: Wind energy production.
+- `bioenergy_mw`: Bioenergy production.
+- `imports_mw`: Imported energy.
+
 ## Project Structure
 
-### Core Modules
+### Core Files and Modules
 
-| Module | Description |
-|--------|-------------|
-| `config.py` | (Implicit in main.py) Global settings, hyperparameters, and paths |
-| `utils.py` | Data loading, preprocessing, and MIMO-MH window preparation |
-| `elm.py` | ELM training and prediction with ridge regularization |
-| `models.py` | Core forecasting runners for SISO, MIMO, MIMO-MH with optional reconciliation |
-| `reconciliation.py` | Hierarchical reconciliation using MinT/WLS for forecast coherence |
-| `metrics.py` | Computation of performance metrics (nRMSE, R2, nMAE, nMBE, etc.) |
-| `plotting.py` | Visualization functions for metrics comparison and subplots |
-| `prophet.py` | Loading pre-computed Prophet forecasts |
-| `timegpt.py` | Loading TimeGPT metrics |
-| `menu.py` | Interactive menu for model selection |
-| `main.py` | Orchestrates the pipeline: data loading, model running, metrics, plotting |
+| File/Module | Description |
+|-------------|-------------|
+| `main.py` | Main entry point that loads data, runs selected models via an interactive menu, computes metrics, and generates plots. |
+| `utils.py` | Utility functions for data loading, preprocessing (e.g., `load_and_preprocess_data` for loading CSV, normalizing columns, handling duplicates; `prepare_data_mimo_mh` for creating sliding windows for MIMO-MH). |
+| `elm.py` | Extreme Learning Machine implementation (e.g., `train_elm` for training with random hidden layers and ridge regression; `predict_elm` for predictions). |
+| `models.py` | Core forecasting models (e.g., `run_siso_all_horizons` for SISO; `run_mimo_all_horizons` for MIMO; `run_mimo_mh_all_horizons` for MIMO-MH; `run_persistence_models` for baseline persistence). Each function takes data, split date, output names, horizons, window size, ELM params, and optional reconciliation flag; returns a DataFrame with true and predicted values. |
+| `reconciliation.py` | Hierarchical reconciliation functions (e.g., `create_S_from_outputs` builds aggregation matrix; `estimate_W_from_train_residuals` estimates error covariance; `reconcile_all_horizons` applies WLS reconciliation). |
+| `metrics.py` | Metric computation (e.g., `compute_all_metrics` computes nRMSE, nMAE, etc., from results; `get_metrics` for individual calculations; `stack_external_metrics` for external models). Also includes correlation and PACF computations. |
+| `plotting.py` | Visualization functions (e.g., `plot_normalized_metrics_subplots` for metric plots; `plot_correlations` for Spearman correlations; `plot_pacf_solar` for partial autocorrelation). |
+| `menu.py` | Interactive menu for model selection (e.g., `select_models` returns list of models and reconciliation flags). |
+| `prophet.py` | Loads pre-computed Prophet forecasts (e.g., `load_prophet_forecasts`). |
+| `timegpt.py` | Loads pre-computed TimeGPT metrics (e.g., `load_timegpt_metrics`). |
 
 ### Forecasting Models
 
@@ -42,20 +51,29 @@ The performance of energy forecasting models directly depends on the quality and
 ## Methodology
 
 ### 1. Single Input Single Output (SISO)
-Forecasts each energy source and horizon independently using ELM, without leveraging cross-source correlations.
+Based on the Extreme Learning Machine (ELM): a single hidden layer neural network with very fast learning and low computational cost, suitable for near real-time forecasting.
+Forecasts a single energy source for a given horizon independently.
+Provides good accuracy but remains limited in scope and slower when scaling to multiple sources and horizons.
 
 ### 2. Multi Input Multi Output (MIMO)
-Jointly forecasts multiple sources per horizon, capturing interdependencies and shared patterns for better aggregate performance.
+Jointly forecasts all energy sources for a given horizon.
+Exploits cross-source correlations and shared variability patterns to improve robustness and overall aggregate performance.
+Extends beyond SISO by integrating interdependencies between sources
 
 ### 3. Multi-Horizon Extension (MIMO-MH)
-Extends MIMO to predict multiple horizons simultaneously in a single model, improving efficiency and temporal consistency.
+Generalizes MIMO to predict all sources across multiple horizons simultaneously within a single model.
+Increases efficiency and ensures temporal consistency across forecasts.
+Followed by an optimal reconciliation step, ensuring that the sum of individual source forecasts always matches the expected system-level total at each horizon.
 
 ### 4. Hierarchical Forecast Reconciliation
-Applies MinT (Minimum Trace) with Weighted Least Squares (WLS) or diagonal covariance to reconcile forecasts, ensuring totals match summed components while minimizing variance.
+Applies the Minimum Trace (MinT) reconciliation method with Weighted Least Squares (WLS).
+Ensures that the sum of disaggregated forecasts (e.g., by source) always matches the corresponding aggregate totals at each horizon.
+Minimizes the overall forecast error variance, improving coherence, accuracy, and consistency across all hierarchical levels.
 
 ### 5. Benchmarking Methods
 - **ELM Variants**: Base and reconciled (REC) versions of SISO, MIMO, MIMO-MH.
 - **External Models**: Prophet (probabilistic univariate) and TimeGPT (pre-trained foundation model).
+- **Persistence Models**: Simple baselines using historical values (last value at horizon or 24h back). Implemented in `models.py` as `run_persistence_models`.
 
 ## Getting Started
 
@@ -85,55 +103,60 @@ Ensure the script runs from the project root.
 
 #### Interactive Execution Pipeline
 
-The main script offers a menu-driven interface for selecting models (base, reconciled, or both) and external benchmarks. Hyperparameters (e.g., split date, ELM neurons, regularization) are prompted interactively.
+The main script provides an interactive menu-driven interface for executing various model combinations. Upon launch, users can select from predefined execution scenarios or create custom model combinations. Hyperparameters (e.g., split date, ELM hidden neurons) are prompted if ELM models are selected.
 
 #### Execution Workflow
 
 **1. Interactive Menu System**
-   - Displays model options including individual, reconciled, combined, and external groups.
-   - Supports custom selections with reconciliation flags.
+   - Displays comprehensive model execution options
+   - Supports flexible model selection through numbered choices
+   - Includes custom execution mode for advanced users
 
 **2. Automated Data Pipeline**
-   - Loads and preprocesses CSV data via `load_and_preprocess_data()`.
-   - Splits train/test based on user-defined date.
-   - Builds sliding windows for ELM inputs.
-   - Runs selected models and stores results.
+   - Loads energy time-series data using load_and_preprocess_data() from utils.py (arguments: file_path, date_col, drop_policy; returns: preprocessed DataFrame with 'ds' timestamp and English-renamed columns).
+   - Preprocesses data with feature engineering, normalization, and column renaming to English.
+   - Creates sliding window matrices optimized for different model architectures using prepare_data_mimo_mh() (arguments: input_matrix, num_rows, max_horizon, window_size, num_outputs; returns: X_windows, Y_windows arrays).
+   - Initializes result containers for performance tracking
 
 **3. Execution Options**
 
 | Option | Models Executed | Description |
 |--------|-----------------|-------------|
-| **1** | SISO | Independent per-source forecasting |
-| **2** | MIMO | Joint multi-source per horizon |
-| **3** | MIMO-MH | Joint multi-source multi-horizon |
-| **4** | SISO-REC | SISO with reconciliation |
-| **5** | MIMO-REC | MIMO with reconciliation |
-| **6** | MIMO-MH-REC | MIMO-MH with reconciliation |
-| **7** | SISO + SISO-REC | Base and reconciled SISO |
-| **8** | MIMO + MIMO-REC | Base and reconciled MIMO |
-| **9** | MIMO-MH + MIMO-MH-REC | Base and reconciled MIMO-MH |
-| **10** | All ELM (Base + REC) | Full ELM suite |
-| **11** | Prophet + TimeGPT | External benchmarks |
-| **12** | All ELM Base + External | Base ELM + benchmarks |
-| **13** | All ELM REC + External | Reconciled ELM + benchmarks |
-| **14** | Custom | User-defined combinations |
+| **1** | SISO | Run SISO (base) : Independent per-source forecasting |
+| **2** | MIMO | Run MIMO (base) : Joint multi-source per horizon |
+| **3** | MIMO-MH | Run MIMO-MH (base) : Joint multi-source multi-horizon |
+| **4** | SISO-REC | Run SISO with reconciliation |
+| **5** | MIMO-REC | Run MIMO with reconciliation |
+| **6** | MIMO-MH-REC | Run MIMO-MH with reconciliation |
+| **7** | SISO (Base + REC) | Run SISO base and reconciled |
+| **8** | MIMO (Base + REC) | Run MIMO base and reconciled |
+| **9** | MIMO-MH (Base + REC) | Run MIMO-MH base and reconciled |
+| **10** | ALL models (Base + REC) | Run all SISO/MIMO/MIMO-MH base and reconciled |
+| **11** | Prophet + TimeGPT | Run external models |
+| **12** | ALL models (ELM Base + External) | Run all base model + Prophet + TimeGPT |
+| **13** | ALL models (ELM REC + External) | Run all reconciled model + Prophet + TimeGPT | 
+| **14** | Custom Selection | User-defined model combinations (with options for base/reconciled/both for ELM models) |
 
 #### Output Generation
 
+
 The pipeline automatically generates:
-- Forecast results DataFrame
-- Metrics CSV (e.g., `final_metrics_comparison.csv`)
-- Performance plots (subplots, normalized metrics, by-variable views) saved to `figures/`
-- Execution timings and logs
+- Model performance metrics and comparison tables (saved to final_metrics_comparison.csv)
+- Forecast visualizations (saved to figures/ directory, e.g., normalized metrics subplots, correlations)
+- Execution logs and timing statistics
+- Spearman correlation matrices (between outputs or horizons) and PACF plots for analysis
+- Reconciliation improvement plots showing % reduction in nRMSE due to reconciliation.
+- Model execution time bar charts.
 
 ## Key Features
 
-- **Efficiency**: ELM's single-layer, closed-form training enables rapid iterations.
-- **Coherence**: Reconciliation enforces physical sums (total = sum of sources).
-- **Flexibility**: Interactive menu for model/hyperparameter selection.
-- **Comparability**: Integrates external models; computes normalized metrics.
-- **Visualization**: Multi-faceted plots for horizon-wise and source-wise analysis.
-- **Robustness**: Handles missing data, duplicates; non-negative predictions via ReLU clamping.
+- Computational Efficiency: ELM provides fast training with analytical solutions (see train_elm in elm.py: arguments include X_train, Y_train, num_hidden, etc.; returns best model tuple).
+- Physical Constraints: Maintains energy balance and grid stability requirements via reconciliation.
+- Scalability: Handles multiple energy sources simultaneously.
+- Real-time Capability: Suitable for operational forecasting systems.
+- Robustness: Handles high variability and intermittency of renewable sources.
+- Metrics and Visualizations: Computes normalized errors (nRMSE, etc.) and generates comparative plots (see plotting.py functions).
+- External Integration: Supports loading results from Prophet and TimeGPT for benchmarking.
 
 ## References
 **<a id="ref1">[1]</a>** Sheraz Aslam, Herodotos Herodotou, Syed Muhammad Mohsin, Nadeem Javaid, Nouman Ashraf, and Shahzad Aslam. [A survey on deep learning methods for power load and renewable energy forecasting in smart microgrids](https://doi.org/10.1016/j.rser.2021.110992). Renewable and Sustainable Energy Reviews, 144:110992, 2021.
