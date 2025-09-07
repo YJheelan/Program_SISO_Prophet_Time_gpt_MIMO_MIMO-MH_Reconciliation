@@ -185,9 +185,9 @@ def main():
     models_to_plot = []
     for model_name, reconcile_flag in models_to_run:
         if model_name == 'prophet':
-            models_to_plot.append('Prophet') # On force la casse exacte
+            models_to_plot.append('Prophet')
         elif model_name == 'timegpt':
-            models_to_plot.append('TimeGPT') # On force la casse exacte
+            models_to_plot.append('TimeGPT')
         else:
             suffix = '-REC' if reconcile_flag else ''
             models_to_plot.append(f"{model_name.upper()}{suffix}")
@@ -201,7 +201,7 @@ def main():
 
     print(">>> Running forecasting models...")
     all_results = []
-    model_times = {}  # New: Collect execution times
+    model_times = {}
 
     # Run selected models
     for model_name, reconcile_flag in models_to_run:
@@ -309,7 +309,7 @@ def main():
     else:
         print("No correlation calculated (df_results empty ?)")
     
-    # Plots seulement si dict non vide
+    # Plots only if dict is not empty
     plot_correlations(output_corrs, by='output')
     plot_correlations(horizon_corrs, by='horizon')
     plot_pacf_solar(df_subset, lags=48)
@@ -336,8 +336,8 @@ def main():
         plot_metrics_subplots(final_metrics, models_to_plot=models_to_plot)
         plot_normalized_metrics_subplots(final_metrics, models_to_plot=models_to_plot)
         plot_all_metrics_by_energy_variable(final_metrics, models_to_plot=models_to_plot)
-        plot_metrics_by_variable_subplots(final_metrics, models_to_plot=models_to_plot) # Call to the new function
-        plot_reconciliation_improvement(final_metrics)  # New: Reconciliation utility plot
+        plot_metrics_by_variable_subplots(final_metrics, models_to_plot=models_to_plot)
+        plot_reconciliation_improvement(final_metrics)
     else:
         print(">>> Skipping plot generation as no results were produced.")
     
