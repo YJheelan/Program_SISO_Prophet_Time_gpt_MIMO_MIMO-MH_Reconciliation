@@ -7,7 +7,7 @@ The Multi-Input Multi-Output Multi-Horizon (MIMO-MH) approach with reconciliatio
 Unlike Single-Input Single-Output (SISO) models, which process each source independently, MIMO leverages correlations between sources and shared variability, thereby improving aggregate accuracy and reducing total deviations (through the compensatory effect between errors). In parallel, ELM offers fast learning, an analytical closed-form solution, and low computational load, making it ideal for near real-time adaptation. This approach optimizes the forecasting of final demand (net consumption), which is essential for dispatching, import management, and grid stability, while providing a robust and cost-effective solution for highly variable, self-consumption-prone multi-energy systems.
 
 ## Flowchart
-
+```mermaid
 flowchart TD
     A["main.py: Entry Point - Load Config & Hyperparams"] --> B["menu.py: select_models() - User Interactive Menu (1-14 Options)"]
     B --> C["utils.py: load_and_preprocess_data() - Load CSV, Slugify, English Rename, Handle Duplicates, Create 'ds'"]
@@ -32,7 +32,7 @@ flowchart TD
 
     style A fill:#e1f5fe
     style Q fill:#e8f5e8
-
+```
 
 ## Dataset Description
 
