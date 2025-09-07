@@ -6,6 +6,34 @@ The Multi-Input Multi-Output Multi-Horizon (MIMO-MH) approach with reconciliatio
 
 Unlike Single-Input Single-Output (SISO) models, which process each source independently, MIMO leverages correlations between sources and shared variability, thereby improving aggregate accuracy and reducing total deviations (through the compensatory effect between errors). In parallel, ELM offers fast learning, an analytical closed-form solution, and low computational load, making it ideal for near real-time adaptation. This approach optimizes the forecasting of final demand (net consumption), which is essential for dispatching, import management, and grid stability, while providing a robust and cost-effective solution for highly variable, self-consumption-prone multi-energy systems.
 
+## Flowchart
+
+flowchart TD
+    A["main.py: Entry Point - Load Config & Hyperparams"] --> B["menu.py: select_models() - User Interactive Menu (1-14 Options)"]
+    B --> C["utils.py: load_and_preprocess_data() - Load CSV, Slugify, English Rename, Handle Duplicates, Create 'ds'"]
+    C --> D["models.py: Run Selected Models Loop - Branch by Type"]
+    D --> E{Model}
+    E -->|"SISO/MIMO/MIMO-MH"| F["models.py: run_siso_all_horizons() / run_mimo_all_horizons() / run_mimo_mh_all_horizons() - Sliding Windows, Train per Var/Horizon or Joint"]
+    E -->|"Persistence (Optional)"| G["models.py: run_persistence_models() - Horizon & 24h Baselines, Compute get_metrics() per Output"]
+    E -->|"Prophet"| H["prophet.py: load_prophet_forecasts() - Load Pre-Computed CSVs by Target"]
+    E -->|"TimeGPT"| I["timegpt.py: load_timegpt_metrics() - Load Metrics CSV or Warn None"]
+    F --> J["elm.py: train_elm() & predict_elm() - Random ReLU Hidden, Ridge Readout, Non-Neg Predictions"]
+    J --> K["reconciliation.py: Optional (if REC Flag) - create_S_from_outputs(), estimate_W_from_train_residuals(), reconcile_all_horizons() (WLS/MinT, Coherence Check)"]
+    K --> L["main.py: process_results() - Extract y_true/y_pred (or REC), Add 'model' Column, Build df_results"]
+    G --> M["metrics.py: get_metrics() - Direct Baselines to df_results"]
+    H --> N["metrics.py: stack_external_metrics() - Regex yhat_h, Compute Metrics per Horizon/Output"]
+    I --> N
+    M --> O["metrics.py: compute_all_metrics(df_results) - Group & Calc RMSE/MAE/MBE/R2/nRMSE/etc. per Model/Horizon/Output"]
+    N --> O
+    L --> O
+    O --> P["metrics.py: compute_correlations() (Output/Horizon Spearman) & compute_pacf_matrix() (Errors PACF)"]
+    P --> Q["plotting.py: Auto Plots - plot_metrics_subplots(), plot_normalized_metrics_subplots(), plot_all_metrics_by_energy_variable(), plot_metrics_by_variable_subplots(), plot_reconciliation_improvement() (% nRMSE Gain), plot_model_times() (Bar), plot_correlations() (Heatmaps), plot_pacf_solar()"]
+
+
+    style A fill:#e1f5fe
+    style Q fill:#e8f5e8
+
+
 ## Dataset Description
 
 The performance of energy forecasting models directly depends on the quality and representativeness of the data. To capture the dynamics of interactions between various energy sources, we use detailed hourly time series over a sufficiently long period to reflect actual variability. A time series is a sequence of observations indexed by time. In this report, the time series represent the hourly electricity production in MWh from different sources (Thermal, Hydropower, Micro-hydro, Solar PV, Wind, Bioenergy, Imports). They also include the average production cost in €/MWh and the total production in MWh. These series are managed by EDF for the Corsica region (https://opendata-corse.edf.fr/pages/home0/), covering the period from 2016 to 2022 with hourly resolution, ensuring both reliability and representativeness of the Corsican island energy context.
