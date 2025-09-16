@@ -63,7 +63,7 @@ Column names in the processed data :
 | `plotting.py` | Visualization functions (e.g., `plot_normalized_metrics_subplots` for metric plots; `plot_correlations` for Spearman correlations; `plot_pacf_solar` for partial autocorrelation). |
 | `menu.py` | Interactive menu for model selection (e.g., `select_models` returns list of models and reconciliation flags). |
 | `prophet.py` | Loads pre-computed Prophet forecasts (e.g., `load_prophet_forecasts`). |
-| `timegpt.py` | Loads pre-computed TimeGPT metrics (e.g., `load_timegpt_metrics`). The CSV file with the time series data can be downloaded here: [[link](https://drive.google.com/drive/folders/1AZXL9hffGtKVW5hph2AaS2I_-EwVU0s5?usp=drive_link)]. |
+| `timegpt.py` | Loads pre-computed TimeGPT metrics (e.g., `load_timegpt_metrics`). The CSV file with the time series data can be downloaded here: [[link](https://drive.google.com/drive/folders/1AZXL9hffGtKVW5hph2AaS2I_-EwVU0s5?usp=drive_link)]. Please place the downloaded file in the same folder as the Python scripts.|
 
 ### Forecasting Models
 
